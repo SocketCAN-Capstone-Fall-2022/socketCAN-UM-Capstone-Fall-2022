@@ -1,4 +1,4 @@
-No Longer Totally Stolen from: A gentle introduction to Linux Kernel fuzzing
+SocketCAN Fuzzing: A gentle introduction to Linux Kernel fuzzing
 =============================================
 Some useful resource material for this project 
 ------------
@@ -26,23 +26,37 @@ Requirements
 
 	sudo apt update && upgrade
 
-### I. Install QEMU-KVM:
+### I. Install QEMU-KVM: 
+
+KVM (Kernel Virtual Machine) is a Linux kernel module that allows a user space program to utilize the hardware virtualization features of various processors. This virtual machine is needed to run our fuzzer.
 
 	sudo apt install qemu-kvm
 	
-### II. Install some kernel development tools:
+### II. Install some kernel development tools: 
+
+Some tools that we need in order to use "development mode" if you want to call it that.
 
 	sudo apt install libncurses-dev flex bison openssl libssl-dev dkms libelf-dev libudev-dev libpci-dev libiberty-dev autoconf
 	
-### III. Install Busybox STATICALLY:
+### III. Install Busybox STATICALLY: 
+
+BusyBox, dubbed the "swiss army knife of embedded Linux", combines tiny versions of many common UNIX utilities into a single small executable. It provides replacements for most of the utilities you usually find in GNU fileutils, shellutils, etc.
+
+BusyBox has been written with size-optimization and limited resources in mind. It is also extremely modular so you can easily include or exclude commands (or features) at compile time. This makes it easy to customize your embedded systems.
 
 	sudo apt install busybox -y
 	
-### IV. Install our Linux Kernel Tar (This project uses 5.19.7)
+### IV. Install our Linux Kernel Tar (This project uses 5.19.7) :
+
+this is just the Linux kernel version we will target for this project. Nothing more to say about this!
 
 	https://www.kernel.org/pub/linux/kernel/v5.x/linux-5.19.7.tar.xz
 	
-### V. Install AFL++ and **COMPILE IT STATICALLY**, Instructions can be found here https://github.com/AFLplusplus/AFLplusplus/blob/stable/docs/INSTALL.md
+### V. Install AFL++ and **COMPILE IT STATICALLY** : 
+
+American fuzzy lop (AFL) is a free software fuzzer that employs genetic algorithms in order to efficiently increase code coverage of the test cases. It is a superior fork to Google's AFL - more speed, more and better mutations, more and better instrumentation, custom module support, etc.
+
+Instructions can be found here https://github.com/AFLplusplus/AFLplusplus/blob/stable/docs/INSTALL.md
 
 	sudo apt-get install -y build-essential python3-dev automake cmake git flex bison libglib2.0-dev libpixman-1-dev python3-setuptools cargo libgtk-3-dev
 	# try to install llvm 12 and install the distro default if that fails
@@ -56,6 +70,41 @@ Requirements
 
 Setup
 --------------
+### Drivers:
+
+We won't be using all the drivers and components associated with our existing Linux 5.19.7 directory. Some of them must be toggled.
+There are 2 ways to go on about this :
+
+1. You can manually enable/disable what we need/don't need 
+
+	`CONFIG_MEDIA_SUPPORT=y`
+	
+	`CONFIG_MEDIA_CAMERA_SUPPORT=y`
+	
+	`CONFIG_VIDEO_DEV=y`
+	
+	`CONFIG_VIDEO_V4L2=y`
+	
+	`CONFIG_V4L2_MEM2MEM_DEV=y`
+	
+	`CONFIG_V4L_TEST_DRIVERS=y`
+	
+	`CONFIG_VIDEO_VIM2M=y`
+	
+2. You can use `make menuconfig` and toggle drivers. Make sure you toggle the following :
+
+	`rawcan protocol`
+	
+	`can gateway router`
+	
+	`enable debugger`
+	
+	`enable kcov`
+	
+	`disable logging`
+	
+	![image](https://user-images.githubusercontent.com/22306262/205537099-7968bc71-196c-4c9f-8a73-58c269c6df8c.png)
+
 	
 ### KERNEL BUILD: 
 
@@ -106,6 +155,11 @@ then, format it as ext3
 
 	mkfs.ext3 /path/to/vmimg.raw
 	
+You should be met with a new file
+
+![image](https://user-images.githubusercontent.com/22306262/205536001-5ff29d42-f7e6-49d9-9c97-6bb2fbbc0241.png)
+
+
 Now mount it! Note that you will first need to make a directory as a mount point. Best do it in your working folder with
 	
 	mkdir <name of mount dir>
@@ -118,17 +172,18 @@ And mount:
 Running
 ---------------
 
-Launch qemu:
+Launch QEMU through the terminal by :
 
 	qemu-system-x86_64 -kernel /path/to/bzImage -initrd /path/tofuzzcan-initramfs.cpio.gz \ 
 	-device virtio-scsi-pci,id=scsi -device scsi-hd,drive=hd -drive file=/path/to/vmimg.raw,if=none,format=raw,id=hd
 	-append "root=/dev/ram0 rootfstype=ramfs init=/init console=ttyS0" -net nic,model=rtl8139 \
  	-net user -m 2048M --nographic
+	
 (^^^ careful! .not the bzImage that is in kernelsrc/arch/x86_64/boot. ^^^
 The vmlinux (the uncompressed pure kernel binary. is just under kernelsrc/)
 
 
-Running AFL++:
+### Running AFL++:
 
 to run afl in the vm run the following command:
 
@@ -139,6 +194,13 @@ if that doesn't seem to work for some reason, try this:
 
 	afl-fuzz -i inp/ -o out/ -- ./bin/fuzzcan
 
+Congratulations! You have completed Fuzzing101!
+
+![image](https://user-images.githubusercontent.com/22306262/205537251-0bf7a346-7dc5-4463-a92c-8d7a1351e7c5.png)
+
+Quick tip : You can continue your previous fuzzing session by running this command in the VM :
+
+	./afl-fuzz -i - -o out -m 1024 -t 4000 -- ./bin/fuzzcan
 
 To 'properly' quit qemu as the typical ctrl+c doesn't work here for some reason:
 
